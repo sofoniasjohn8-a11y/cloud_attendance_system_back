@@ -49,85 +49,99 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Clock In - Create new attendance record
+     * Clock In - Create new attendance record per schedule slot
      */
     public function store(Request $request)
     {
         try {
             $validated = $request->validate([
-                'office_id' => 'required|exists:offices,id',
-                'latitude' => 'required|numeric|between:-90,90',
-                'longitude' => 'required|numeric|between:-180,180',
-                'remarks' => 'nullable|string',
+                'office_id'   => 'required|exists:offices,id',
+                'latitude'    => 'required|numeric|between:-90,90',
+                'longitude'   => 'required|numeric|between:-180,180',
+                'schedule_id' => 'nullable|exists:schedules,id',
+                'remarks'     => 'nullable|string',
             ]);
 
-            $userId = auth()->id();
-            $today = now()->toDateString();
+            $userId     = auth()->id();
+            $today      = now()->toDateString();
+            $dayOfWeek  = now()->format('l');
+            $now        = now();
 
-            // Check if already clocked in today
+            // Find the matching schedule for this clock-in
+            if (!empty($validated['schedule_id'])) {
+                $schedule = Schedule::where('id', $validated['schedule_id'])
+                    ->where('user_id', $userId)
+                    ->first();
+            } else {
+                // Auto-detect: find the schedule whose window covers now (start_time - 30min buffer)
+                $schedule = Schedule::where('user_id', $userId)
+                    ->where('day_of_week', $dayOfWeek)
+                    ->whereRaw("start_time <= ?::time", [$now->addMinutes(30)->format('H:i:s')])
+                    ->whereRaw("end_time > ?::time", [$now->subMinutes(30)->format('H:i:s')])
+                    ->first();
+            }
+
+            if (!$schedule) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No schedule found for this time slot.',
+                ], 422);
+            }
+
+            // Check if already clocked in for this specific schedule slot today
             $existing = Attendance::where('user_id', $userId)
                 ->whereDate('work_date', $today)
+                ->where('schedule_id', $schedule->id)
                 ->first();
 
             if ($existing) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Already clocked in today. Clock out first.'
+                    'message' => 'Already clocked in for this schedule slot. Clock out first.',
+                    'attendance' => $existing,
                 ], 422);
             }
 
-            // Check if within office geofence
-            $office = Office::find($validated['office_id']);
+            // Geofence check
+            $office   = Office::find($validated['office_id']);
             $distance = $this->calculateDistance(
-                $validated['latitude'],
-                $validated['longitude'],
-                $office->latitude,
-                $office->longitude
+                $validated['latitude'], $validated['longitude'],
+                $office->latitude, $office->longitude
             );
 
             if ($distance > $office->radius_meters) {
                 return response()->json([
-                    'success' => false,
-                    'message' => 'You are outside the office geofence. Distance: ' . round($distance, 2) . 'm from office.',
-                    'distance' => round($distance, 2),
-                    'allowed_radius' => $office->radius_meters
+                    'success'        => false,
+                    'message'        => 'You are outside the office geofence. Distance: ' . round($distance, 2) . 'm from office.',
+                    'distance'       => round($distance, 2),
+                    'allowed_radius' => $office->radius_meters,
                 ], 422);
             }
 
-            // Determine status (present/late/absent)
-            $status = 'present';
-            $dayOfWeek = now()->format('l'); // Monday, Tuesday, etc
-            $schedule = Schedule::where('user_id', $userId)
-                ->where('day_of_week', $dayOfWeek)
-                ->first();
-
-            if ($schedule && now()->format('H:i:s') > $schedule->start_time) {
-                $status = 'late';
-            } elseif (!$schedule) {
-                $status = 'absent';
-            }
+            // Determine status based on schedule start_time
+            $clockInTime     = now()->format('H:i:s');
+            $scheduleStart   = $schedule->start_time;
+            $status = $clockInTime <= $scheduleStart ? 'present' : 'late';
 
             $attendance = Attendance::create([
-                'user_id' => $userId,
-                'office_id' => $validated['office_id'],
-                'work_date' => $today,
-                'clock_in' => now(),
-                'lat_in' => $validated['latitude'],
-                'lng_in' => $validated['longitude'],
-                'status' => $status,
-                'remarks' => $validated['remarks'] ?? null,
+                'user_id'     => $userId,
+                'office_id'   => $validated['office_id'],
+                'schedule_id' => $schedule->id,
+                'work_date'   => $today,
+                'clock_in'    => now(),
+                'lat_in'      => $validated['latitude'],
+                'lng_in'      => $validated['longitude'],
+                'status'      => $status,
+                'remarks'     => $validated['remarks'] ?? null,
             ]);
 
             return response()->json([
                 'success' => true,
-                'data' => $attendance->load(['user', 'office']),
-                'message' => 'Clocked in successfully. Status: ' . $status
+                'data'    => $attendance->load(['user', 'office', 'schedule']),
+                'message' => 'Clocked in successfully. Status: ' . $status,
             ], 201);
         } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'errors' => $e->errors()
-            ], 422);
+            return response()->json(['success' => false, 'errors' => $e->errors()], 422);
         }
     }
 

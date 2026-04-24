@@ -9,6 +9,7 @@ class Attendance extends Model
     protected $fillable = [
         'user_id',
         'office_id',
+        'schedule_id',
         'work_date',
         'clock_in',
         'clock_out',
@@ -25,6 +26,11 @@ class Attendance extends Model
         'lat_in' => 'decimal:8',
         'lng_in' => 'decimal:8',
     ];
+
+    public function schedule()
+    {
+        return $this->belongsTo(Schedule::class);
+    }
 
     public function user()
     {
