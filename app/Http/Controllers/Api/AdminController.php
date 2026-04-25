@@ -15,6 +15,43 @@ use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
+    // Assign or change a user's office
+    public function assignOffice(Request $request, $id)
+    {
+        $user = User::where('role', 'user')->find($id);
+
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'User not found'], 404);
+        }
+
+        $validated = $request->validate(['office_id' => 'required|exists:offices,id']);
+        $user->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Office assigned successfully',
+            'data'    => $user->load('office'),
+        ]);
+    }
+
+    // List all users grouped by office
+    public function usersByOffice()
+    {
+        $offices = \App\Models\Office::with(['users' => fn($q) => $q->where('role', 'user')
+            ->withCount('attendances')])->get();
+
+        $unassigned = User::where('role', 'user')->whereNull('office_id')
+            ->withCount('attendances')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'offices'    => $offices,
+                'unassigned' => $unassigned,
+            ],
+        ]);
+    }
+
     // List all users
     public function users()
     {

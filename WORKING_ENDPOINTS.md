@@ -37,6 +37,8 @@ curl -X POST http://localhost:8000/api/register \
 }
 ```
 
+> `office_id` is optional — if omitted, the first available office is auto-assigned. Ethiopian work schedules (morning + afternoon shifts) are also auto-created for the user.
+
 **Response (201 Created):**
 
 ```json
@@ -48,6 +50,15 @@ curl -X POST http://localhost:8000/api/register \
         "id": 1,
         "name": "John Doe",
         "email": "john@example.com",
+        "role": "user",
+        "office_id": 1,
+        "office": {
+            "id": 1,
+            "name": "Addis Ababa HQ",
+            "latitude": 9.032,
+            "longitude": 38.7469,
+            "radius_meters": 200
+        },
         "created_at": "2026-04-24T10:00:00Z",
         "updated_at": "2026-04-24T10:00:00Z"
     }
@@ -77,7 +88,16 @@ curl -X POST http://localhost:8000/api/login \
     "user": {
         "id": 1,
         "name": "John Doe",
-        "email": "john@example.com"
+        "email": "john@example.com",
+        "role": "user",
+        "office_id": 1,
+        "office": {
+            "id": 1,
+            "name": "Addis Ababa HQ",
+            "latitude": 9.032,
+            "longitude": 38.7469,
+            "radius_meters": 200
+        }
     }
 }
 ```
@@ -474,12 +494,13 @@ curl -X GET "http://localhost:8000/api/attendances?office_id=1"
 
 ### 2. **POST /api/attendances** - Clock In ⭐ (MOST IMPORTANT) 🔒
 
+> `office_id` is no longer required — the user's assigned office is used automatically.
+
 ```bash
 curl -X POST http://localhost:8000/api/attendances \
   -H "Authorization: Bearer <your_token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "office_id": 1,
     "latitude": 9.0320,
     "longitude": 38.7469,
     "remarks": "On time"
@@ -490,12 +511,13 @@ curl -X POST http://localhost:8000/api/attendances \
 
 ```json
 {
-    "office_id": 1,
     "latitude": 9.032,
     "longitude": 38.7469,
     "remarks": "On time"
 }
 ```
+
+> The system auto-detects which schedule slot (morning or afternoon) the clock-in belongs to based on current time. A user can clock in once per shift per day.
 
 **Response (201 Created):**
 
@@ -598,6 +620,273 @@ curl -X PUT http://localhost:8000/api/attendances/42 \
 
 ```bash
 curl -X DELETE http://localhost:8000/api/attendances/42
+```
+
+---
+
+## 🛡️ **Admin Endpoints** 🔒 (Admin role required)
+
+### **GET /api/admin/users** - List all non-admin users
+
+```bash
+curl -X GET http://localhost:8000/api/admin/users \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+---
+
+### **GET /api/admin/users/by-office** - Users grouped by office
+
+```bash
+curl -X GET http://localhost:8000/api/admin/users/by-office \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "offices": [
+            {
+                "id": 1,
+                "name": "Addis Ababa HQ",
+                "users": [
+                    { "id": 1, "name": "John", "email": "john@example.com", "attendances_count": 10 }
+                ]
+            }
+        ],
+        "unassigned": []
+    }
+}
+```
+
+---
+
+### **PUT /api/admin/users/{id}/office** - Assign/change user's office
+
+```bash
+curl -X PUT http://localhost:8000/api/admin/users/1/office \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"office_id": 2}'
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "message": "Office assigned successfully",
+    "data": {
+        "id": 1,
+        "name": "John Doe",
+        "office_id": 2,
+        "office": { "id": 2, "name": "Bole Branch" }
+    }
+}
+```
+
+---
+
+### **PUT /api/admin/users/{id}/role** - Promote/demote user
+
+```bash
+curl -X PUT http://localhost:8000/api/admin/users/1/role \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"role": "admin"}'
+```
+
+---
+
+### **DELETE /api/admin/users/{id}** - Delete user
+
+```bash
+curl -X DELETE http://localhost:8000/api/admin/users/1 \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+---
+
+### **PUT /api/admin/attendances/{id}** - Override clock-in/out
+
+```bash
+curl -X PUT http://localhost:8000/api/admin/attendances/42 \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clock_in": "2026-04-24 08:00:00",
+    "clock_out": "2026-04-24 12:30:00",
+    "status": "present"
+  }'
+```
+
+---
+
+### **GET /api/admin/overview** - Daily attendance by schedule slot
+
+```bash
+curl -X GET "http://localhost:8000/api/admin/overview?date=2026-04-24&office_id=1" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "date": "2026-04-24",
+        "day_of_week": "Thursday",
+        "total_users": 2,
+        "present": [
+            {
+                "user": { "id": 1, "name": "John", "email": "john@example.com" },
+                "schedule_id": 1,
+                "start_time": "08:00:00",
+                "end_time": "12:30:00",
+                "status": "present",
+                "clock_in": "2026-04-24T08:05:00Z",
+                "clock_out": "2026-04-24T12:30:00Z"
+            }
+        ],
+        "absent": [
+            {
+                "user": { "id": 2, "name": "Jane", "email": "jane@example.com" },
+                "schedule_id": 3,
+                "start_time": "08:00:00",
+                "end_time": "12:30:00",
+                "status": "absent"
+            }
+        ],
+        "schedule_breakdown": [],
+        "office_breakdown": []
+    }
+}
+```
+
+---
+
+### **GET /api/admin/calendar** - Monthly calendar view
+
+```bash
+curl -X GET "http://localhost:8000/api/admin/calendar?month=04&year=2026" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "month": "April 2026",
+        "days": [
+            {
+                "date": "2026-04-24",
+                "day_of_week": "Thursday",
+                "scheduled": 4,
+                "present": 3,
+                "absent": 1,
+                "late": 1,
+                "slots": [
+                    {
+                        "user_id": 1,
+                        "user_name": "John",
+                        "start_time": "08:00:00",
+                        "end_time": "12:30:00",
+                        "status": "present",
+                        "clock_in": "2026-04-24T08:05:00Z",
+                        "clock_out": "2026-04-24T12:28:00Z"
+                    }
+                ]
+            }
+        ]
+    }
+}
+```
+
+---
+
+### **POST /api/admin/notify/absent** - Email one absent user
+
+```bash
+curl -X POST http://localhost:8000/api/admin/notify/absent \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 1, "date": "2026-04-24"}'
+```
+
+> Also stores a notification record in the DB for the user's dashboard.
+
+---
+
+### **POST /api/admin/notify/absent-all** - Email all absent users
+
+```bash
+curl -X POST http://localhost:8000/api/admin/notify/absent-all \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"date": "2026-04-24"}'
+```
+
+---
+
+## 🔔 **Notification Endpoints** 🔒
+
+### **GET /api/notifications** - Get user notifications
+
+```bash
+curl -X GET http://localhost:8000/api/notifications \
+  -H "Authorization: Bearer <your_token>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "unread_count": 1,
+    "data": [
+        {
+            "id": 1,
+            "type": "absent",
+            "title": "Absence Recorded",
+            "message": "You were marked absent on 2026-04-24.",
+            "date": "2026-04-24",
+            "is_read": false
+        }
+    ]
+}
+```
+
+---
+
+### **PUT /api/notifications/{id}/read** - Mark one as read
+
+```bash
+curl -X PUT http://localhost:8000/api/notifications/1/read \
+  -H "Authorization: Bearer <your_token>"
+```
+
+---
+
+### **PUT /api/notifications/read-all** - Mark all as read
+
+```bash
+curl -X PUT http://localhost:8000/api/notifications/read-all \
+  -H "Authorization: Bearer <your_token>"
+```
+
+---
+
+### **DELETE /api/notifications/{id}** - Delete notification
+
+```bash
+curl -X DELETE http://localhost:8000/api/notifications/1 \
+  -H "Authorization: Bearer <your_token>"
 ```
 
 ---
@@ -723,7 +1012,6 @@ Create collection with these requests:
     - Body (JSON):
         ```json
         {
-            "office_id": 1,
             "latitude": 9.032,
             "longitude": 38.7469,
             "remarks": "Arrived on time"
@@ -833,32 +1121,60 @@ const getReport = async (month, year, officeId) => {
 
 ## ✅ **All Endpoints Summary**
 
-> 🔒 = Requires `Authorization: Bearer <token>` header
+> 🔒 = Bearer token required | 👑 = Admin role required
 
-| Method | Endpoint                | Auth | Purpose                  |
-| ------ | ----------------------- | ---- | ------------------------ |
-| GET    | `/api/health`           |      | Check API status         |
-| POST   | `/api/register`         |      | Register & get token     |
-| POST   | `/api/login`            |      | Login & get token        |
-| POST   | `/api/logout`           | 🔒   | Revoke token             |
-| GET    | `/api/me`               | 🔒   | Get current user         |
-| GET    | `/api/offices`          |      | List all offices         |
-| GET    | `/api/offices/{id}`     |      | Get office               |
-| POST   | `/api/offices`          | 🔒   | Create office            |
-| PUT    | `/api/offices/{id}`     | 🔒   | Update office            |
-| DELETE | `/api/offices/{id}`     | 🔒   | Delete office            |
-| GET    | `/api/schedules`        | 🔒   | List schedules           |
-| POST   | `/api/schedules`        | 🔒   | Create schedule          |
-| GET    | `/api/schedules/{id}`   | 🔒   | Get schedule             |
-| PUT    | `/api/schedules/{id}`   | 🔒   | Update schedule          |
-| DELETE | `/api/schedules/{id}`   | 🔒   | Delete schedule          |
-| GET    | `/api/attendances`      | 🔒   | List attendances         |
-| POST   | `/api/attendances`      | 🔒   | Clock in                 |
-| GET    | `/api/attendances/{id}` | 🔒   | Get attendance           |
-| PUT    | `/api/attendances/{id}` | 🔒   | Clock out                |
-| DELETE | `/api/attendances/{id}` | 🔒   | Delete attendance        |
-| GET    | `/api/reports/monthly`  |      | Monthly report           |
+| Method | Endpoint                          | Auth | Purpose                        |
+| ------ | --------------------------------- | ---- | ------------------------------ |
+| GET    | `/api/health`                     |      | Check API status               |
+| POST   | `/api/register`                   |      | Register, auto-assign office & schedules |
+| POST   | `/api/login`                      |      | Login & get token              |
+| POST   | `/api/logout`                     | 🔒   | Revoke token                   |
+| GET    | `/api/me`                         | 🔒   | Get current user + office      |
+| GET    | `/api/offices`                    |      | List all offices               |
+| GET    | `/api/offices/{id}`               |      | Get office                     |
+| POST   | `/api/offices`                    | 🔒   | Create office                  |
+| PUT    | `/api/offices/{id}`               | 🔒   | Update office location/radius  |
+| DELETE | `/api/offices/{id}`               | 🔒   | Delete office                  |
+| GET    | `/api/schedules`                  | 🔒   | List schedules                 |
+| POST   | `/api/schedules`                  | 🔒   | Create schedule                |
+| GET    | `/api/schedules/{id}`             | 🔒   | Get schedule                   |
+| PUT    | `/api/schedules/{id}`             | 🔒   | Update schedule                |
+| DELETE | `/api/schedules/{id}`             | 🔒   | Delete schedule                |
+| GET    | `/api/attendances`                | 🔒   | List attendances               |
+| POST   | `/api/attendances`                | 🔒   | Clock in (office auto-detected)|
+| GET    | `/api/attendances/{id}`           | 🔒   | Get attendance                 |
+| PUT    | `/api/attendances/{id}`           | 🔒   | Clock out                      |
+| DELETE | `/api/attendances/{id}`           | 🔒   | Delete attendance              |
+| GET    | `/api/notifications`              | 🔒   | Get user notifications         |
+| PUT    | `/api/notifications/{id}/read`    | 🔒   | Mark notification read         |
+| PUT    | `/api/notifications/read-all`     | 🔒   | Mark all notifications read    |
+| DELETE | `/api/notifications/{id}`         | 🔒   | Delete notification            |
+| GET    | `/api/reports/monthly`            |      | Monthly report                 |
+| GET    | `/api/admin/users`                | 👑   | List all users (non-admin)     |
+| GET    | `/api/admin/users/by-office`      | 👑   | Users grouped by office        |
+| GET    | `/api/admin/users/{id}`           | 👑   | Get user + attendance history  |
+| PUT    | `/api/admin/users/{id}/office`    | 👑   | Assign/change user's office    |
+| PUT    | `/api/admin/users/{id}/role`      | 👑   | Promote/demote user            |
+| DELETE | `/api/admin/users/{id}`           | 👑   | Delete user                    |
+| PUT    | `/api/admin/attendances/{id}`     | 👑   | Override clock-in/out/status   |
+| GET    | `/api/admin/overview`             | 👑   | Daily attendance by schedule   |
+| GET    | `/api/admin/calendar`             | 👑   | Monthly calendar view          |
+| POST   | `/api/admin/notify/absent`        | 👑   | Email + notify one absent user |
+| POST   | `/api/admin/notify/absent-all`    | 👑   | Email + notify all absent users|
 
 ---
 
-**Flow:** Register or Login → save `token` from response → include `Authorization: Bearer <token>` on all 🔒 requests.
+## ⏰ **Ethiopian Work Schedules**
+
+All users are automatically assigned two daily shifts (Monday–Friday):
+
+| Shift | Ethiopian Time | Standard Time |
+|-------|---------------|---------------|
+| Morning | 2:00 – 6:30 | `08:00 – 12:30` |
+| Afternoon | 7:30 – 11:30 | `13:30 – 17:30` |
+
+A user can clock in **once per shift per day**. The system auto-detects which shift based on the current time.
+
+---
+
+**Flow:** Register → office & schedules auto-assigned → Login → save `token` → include `Authorization: Bearer <token>` on all 🔒 requests → Clock in without specifying office.

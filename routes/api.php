@@ -42,8 +42,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin-only routes
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/users',                          [AdminController::class, 'users']);
+        Route::get('/users/by-office',                [AdminController::class, 'usersByOffice']);
         Route::get('/users/{id}',                     [AdminController::class, 'showUser']);
         Route::put('/users/{id}/role',                [AdminController::class, 'updateUserRole']);
+        Route::put('/users/{id}/office',              [AdminController::class, 'assignOffice']);
         Route::delete('/users/{id}',                  [AdminController::class, 'deleteUser']);
         Route::put('/attendances/{id}',               [AdminController::class, 'updateAttendance']);
         Route::get('/overview',                       [AdminController::class, 'dailyOverview']);

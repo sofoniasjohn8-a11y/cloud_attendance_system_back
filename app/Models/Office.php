@@ -23,4 +23,9 @@ class Office extends Model
     {
         return $this->hasMany(Attendance::class);
     }
+
+    public function users()
+    {
+        return $this->hasMany(\App\Models\User::class);
+    }
 }

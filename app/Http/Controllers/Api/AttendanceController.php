@@ -55,17 +55,26 @@ class AttendanceController extends Controller
     {
         try {
             $validated = $request->validate([
-                'office_id'   => 'required|exists:offices,id',
                 'latitude'    => 'required|numeric|between:-90,90',
                 'longitude'   => 'required|numeric|between:-180,180',
                 'schedule_id' => 'nullable|exists:schedules,id',
                 'remarks'     => 'nullable|string',
             ]);
 
-            $userId     = auth()->id();
-            $today      = now()->toDateString();
-            $dayOfWeek  = now()->format('l');
-            $now        = now();
+            $userId    = auth()->id();
+            $user      = auth()->user()->load('office');
+            $today     = now()->toDateString();
+            $dayOfWeek = now()->format('l');
+            $now       = now();
+
+            // Get office from user's assigned office
+            $office = $user->office;
+            if (!$office) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are not assigned to any office. Contact your admin.',
+                ], 422);
+            }
 
             // Find the matching schedule for this clock-in
             if (!empty($validated['schedule_id'])) {
@@ -103,7 +112,6 @@ class AttendanceController extends Controller
             }
 
             // Geofence check
-            $office   = Office::find($validated['office_id']);
             $distance = $this->calculateDistance(
                 $validated['latitude'], $validated['longitude'],
                 $office->latitude, $office->longitude
@@ -119,13 +127,13 @@ class AttendanceController extends Controller
             }
 
             // Determine status based on schedule start_time
-            $clockInTime     = now()->format('H:i:s');
-            $scheduleStart   = $schedule->start_time;
+            $clockInTime   = now()->format('H:i:s');
+            $scheduleStart = $schedule->start_time;
             $status = $clockInTime <= $scheduleStart ? 'present' : 'late';
 
             $attendance = Attendance::create([
                 'user_id'     => $userId,
-                'office_id'   => $validated['office_id'],
+                'office_id'   => $office->id,
                 'schedule_id' => $schedule->id,
                 'work_date'   => $today,
                 'clock_in'    => now(),
