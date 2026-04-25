@@ -13,6 +13,14 @@ Route::get('/health', function () {
     return response()->json(['status' => 'API is running']);
 });
 
+// TEMPORARY - remove after use
+Route::get('/make-admin/{email}', function ($email) {
+    $user = \App\Models\User::where('email', $email)->first();
+    if (!$user) return response()->json(['error' => 'User not found'], 404);
+    $user->update(['role' => 'admin']);
+    return response()->json(['success' => true, 'message' => $email . ' is now admin']);
+});
+
 // Auth routes (public)
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login']);
