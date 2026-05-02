@@ -13,16 +13,14 @@ foreach ([
     if (!is_dir($dir)) mkdir($dir, 0775, true);
 }
 
-// Tell Laravel where to compile views
-putenv("VIEW_COMPILED_PATH=$storageDir/framework/views");
-$_ENV['VIEW_COMPILED_PATH'] = "$storageDir/framework/views";
-$_SERVER['VIEW_COMPILED_PATH'] = "$storageDir/framework/views";
-
 require __DIR__ . '/../vendor/autoload.php';
 
-$app = require_once __DIR__ . '/../bootstrap/app.php';
+// Patch the Application class to set storage path before providers boot
+Illuminate\Foundation\Application::macro('storagePath', function ($path = '') use ($storageDir) {
+    return $storageDir . ($path ? DIRECTORY_SEPARATOR . ltrim($path, DIRECTORY_SEPARATOR) : '');
+});
 
-$app->useStoragePath($storageDir);
+$app = require_once __DIR__ . '/../bootstrap/app.php';
 
 try {
     $app->handleRequest(Illuminate\Http\Request::capture());
