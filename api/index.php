@@ -2,6 +2,19 @@
 
 define('LARAVEL_START', microtime(true));
 
+// Quick debug - show what URL Vercel passes
+if (isset($_GET['debug'])) {
+    header('Content-Type: application/json');
+    echo json_encode([
+        'REQUEST_URI' => $_SERVER['REQUEST_URI'] ?? 'not set',
+        'PATH_INFO' => $_SERVER['PATH_INFO'] ?? 'not set',
+        'SCRIPT_NAME' => $_SERVER['SCRIPT_NAME'] ?? 'not set',
+        'HTTP_HOST' => $_SERVER['HTTP_HOST'] ?? 'not set',
+        'REQUEST_METHOD' => $_SERVER['REQUEST_METHOD'] ?? 'not set',
+    ]);
+    exit;
+}
+
 $storageDir = '/tmp/storage';
 foreach ([
     "$storageDir/framework/cache/data",
@@ -16,11 +29,6 @@ foreach ([
 putenv("LARAVEL_STORAGE_PATH=$storageDir");
 $_ENV['LARAVEL_STORAGE_PATH'] = $storageDir;
 $_SERVER['LARAVEL_STORAGE_PATH'] = $storageDir;
-
-// Fix REQUEST_URI for Vercel - ensure full path is passed
-if (!isset($_SERVER['REQUEST_URI']) || $_SERVER['REQUEST_URI'] === '/') {
-    $_SERVER['REQUEST_URI'] = $_SERVER['PATH_INFO'] ?? '/';
-}
 
 @unlink(__DIR__ . '/../bootstrap/cache/services.php');
 
