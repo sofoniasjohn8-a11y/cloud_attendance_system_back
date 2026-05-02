@@ -2,19 +2,6 @@
 
 define('LARAVEL_START', microtime(true));
 
-// Quick debug - show what URL Vercel passes
-if (isset($_GET['debug'])) {
-    header('Content-Type: application/json');
-    echo json_encode([
-        'REQUEST_URI' => $_SERVER['REQUEST_URI'] ?? 'not set',
-        'PATH_INFO' => $_SERVER['PATH_INFO'] ?? 'not set',
-        'SCRIPT_NAME' => $_SERVER['SCRIPT_NAME'] ?? 'not set',
-        'HTTP_HOST' => $_SERVER['HTTP_HOST'] ?? 'not set',
-        'REQUEST_METHOD' => $_SERVER['REQUEST_METHOD'] ?? 'not set',
-    ]);
-    exit;
-}
-
 $storageDir = '/tmp/storage';
 foreach ([
     "$storageDir/framework/cache/data",
@@ -29,6 +16,11 @@ foreach ([
 putenv("LARAVEL_STORAGE_PATH=$storageDir");
 $_ENV['LARAVEL_STORAGE_PATH'] = $storageDir;
 $_SERVER['LARAVEL_STORAGE_PATH'] = $storageDir;
+
+// Fix: Vercel sets SCRIPT_NAME to /api/index.php which causes Laravel
+// to strip /api from the path. Override to make Laravel see full path.
+$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SERVER['PHP_SELF'] = '/index.php';
 
 @unlink(__DIR__ . '/../bootstrap/cache/services.php');
 
