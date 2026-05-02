@@ -13,6 +13,11 @@ foreach ([
     if (!is_dir($dir)) mkdir($dir, 0775, true);
 }
 
+// Tell Laravel where to compile views
+putenv("VIEW_COMPILED_PATH=$storageDir/framework/views");
+$_ENV['VIEW_COMPILED_PATH'] = "$storageDir/framework/views";
+$_SERVER['VIEW_COMPILED_PATH'] = "$storageDir/framework/views";
+
 require __DIR__ . '/../vendor/autoload.php';
 
 $app = require_once __DIR__ . '/../bootstrap/app.php';
