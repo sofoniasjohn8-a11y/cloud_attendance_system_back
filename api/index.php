@@ -1,8 +1,11 @@
 <?php
 
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
 define('LARAVEL_START', microtime(true));
 
-// Vercel has a read-only filesystem, use /tmp for writable storage
 $storageDir = '/tmp/storage';
 foreach ([
     "$storageDir/framework/cache/data",
