@@ -13,12 +13,32 @@ foreach ([
     if (!is_dir($dir)) mkdir($dir, 0775, true);
 }
 
-// Laravel 12 reads LARAVEL_STORAGE_PATH env var to override storage path
 putenv("LARAVEL_STORAGE_PATH=$storageDir");
 $_ENV['LARAVEL_STORAGE_PATH'] = $storageDir;
 $_SERVER['LARAVEL_STORAGE_PATH'] = $storageDir;
 
 require __DIR__ . '/../vendor/autoload.php';
+
+// Remove dev-only packages from packages.php at runtime
+$pkgFile = __DIR__ . '/../bootstrap/cache/packages.php';
+if (file_exists($pkgFile)) {
+    $devOnly = ['laravel/boost', 'laravel/mcp', 'laravel/pail', 'laravel/roster', 'laravel/sail', 'nunomaduro/collision', 'pestphp/pest-plugin-laravel'];
+    $packages = require $pkgFile;
+    $changed = false;
+    foreach ($devOnly as $pkg) {
+        if (isset($packages[$pkg])) {
+            unset($packages[$pkg]);
+            $changed = true;
+        }
+    }
+    if ($changed) {
+        $tmpPkg = '/tmp/packages.php';
+        file_put_contents($tmpPkg, '<?php return ' . var_export($packages, true) . ';');
+        // Symlink or copy to override
+        @unlink($pkgFile);
+        copy($tmpPkg, $pkgFile);
+    }
+}
 
 $app = require_once __DIR__ . '/../bootstrap/app.php';
 
