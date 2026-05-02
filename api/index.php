@@ -17,6 +17,11 @@ putenv("LARAVEL_STORAGE_PATH=$storageDir");
 $_ENV['LARAVEL_STORAGE_PATH'] = $storageDir;
 $_SERVER['LARAVEL_STORAGE_PATH'] = $storageDir;
 
+// Fix REQUEST_URI for Vercel - ensure full path is passed
+if (!isset($_SERVER['REQUEST_URI']) || $_SERVER['REQUEST_URI'] === '/') {
+    $_SERVER['REQUEST_URI'] = $_SERVER['PATH_INFO'] ?? '/';
+}
+
 @unlink(__DIR__ . '/../bootstrap/cache/services.php');
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -28,11 +33,5 @@ try {
 } catch (\Throwable $e) {
     http_response_code(500);
     header('Content-Type: application/json');
-    $trace = array_slice(array_map(function($t) {
-        return ($t['file'] ?? '?') . ':' . ($t['line'] ?? '?') . ' ' . ($t['function'] ?? '');
-    }, $e->getTrace()), 0, 8);
-    echo json_encode([
-        'error' => $e->getMessage(),
-        'trace' => $trace,
-    ]);
+    echo json_encode(['error' => $e->getMessage()]);
 }
