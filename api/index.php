@@ -17,6 +17,13 @@ putenv("LARAVEL_STORAGE_PATH=$storageDir");
 $_ENV['LARAVEL_STORAGE_PATH'] = $storageDir;
 $_SERVER['LARAVEL_STORAGE_PATH'] = $storageDir;
 
+// Check for services.php cache
+$servicesCache = __DIR__ . '/../bootstrap/cache/services.php';
+if (file_exists($servicesCache)) {
+    // Delete it so Laravel re-discovers providers fresh
+    @unlink($servicesCache);
+}
+
 require __DIR__ . '/../vendor/autoload.php';
 
 $app = require_once __DIR__ . '/../bootstrap/app.php';
