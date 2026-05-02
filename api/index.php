@@ -17,12 +17,7 @@ putenv("LARAVEL_STORAGE_PATH=$storageDir");
 $_ENV['LARAVEL_STORAGE_PATH'] = $storageDir;
 $_SERVER['LARAVEL_STORAGE_PATH'] = $storageDir;
 
-// Check for services.php cache
-$servicesCache = __DIR__ . '/../bootstrap/cache/services.php';
-if (file_exists($servicesCache)) {
-    // Delete it so Laravel re-discovers providers fresh
-    @unlink($servicesCache);
-}
+@unlink(__DIR__ . '/../bootstrap/cache/services.php');
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -33,9 +28,11 @@ try {
 } catch (\Throwable $e) {
     http_response_code(500);
     header('Content-Type: application/json');
+    $trace = array_slice(array_map(function($t) {
+        return ($t['file'] ?? '?') . ':' . ($t['line'] ?? '?') . ' ' . ($t['function'] ?? '');
+    }, $e->getTrace()), 0, 8);
     echo json_encode([
         'error' => $e->getMessage(),
-        'file'  => str_replace('/var/task/user/', '', $e->getFile()),
-        'line'  => $e->getLine(),
+        'trace' => $trace,
     ]);
 }
